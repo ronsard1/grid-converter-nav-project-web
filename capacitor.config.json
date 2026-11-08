@@ -1,0 +1,6 @@
+{
+  "appId": "rw.gridnav.app",
+  "appName": "GridNav",
+  "webDir": "www",
+  "android": { "backgroundColor": "#E8E5D6" }
+}
