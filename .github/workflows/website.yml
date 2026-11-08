@@ -1,0 +1,18 @@
+# Keeps the website up to date: every push to main is copied to the gh-pages branch,
+# which GitHub Pages publishes at https://ronsard1.github.io/grid-converter-nav-project-web/
+name: Update website
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Copy main to gh-pages
+        run: git push --force origin HEAD:gh-pages
