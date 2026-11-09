@@ -132,7 +132,8 @@
         <li><b>Add points</b>: in <i>Points</i>, type each checkpoint's grid (and the Index / start).</li>
         <li><b>Plan</b>: in <i>Exercise</i>, choose syndicates, checkpoints per route and the km, then <i>Make routes</i>.</li>
         <li><b>Print</b>: leader summary and one paper per syndicate. Track them in <i>Control</i>.</li></ol>
-        <p class="small">Everything stays on this phone and works with no internet. Use the save icon (top right) to keep a backup.</p></div>`}`;
+        <p class="small">Everything stays on this phone and works with no internet. Use the save icon (top right) to keep a backup.</p></div>`}
+      <footer class="brand-foot"><b>GridNav</b><span>Developed by <b>ASRAT</b></span></footer>`;
     $('#newMap', el).onclick = () => mapEditor();
     $$('.mapcard', el).forEach(c => c.onclick = e => {
       const ed = e.target.closest('[data-edit]');
@@ -1509,7 +1510,8 @@
         <button class="btn block" id="bkSave">${icon('save')} Save backup on this phone</button>
         <label class="btn block">Restore from a backup file<input type="file" id="bkImp" accept=".json,application/json,text/plain" hidden></label>
       </div>
-      <p class="tiny" style="margin-top:10px">Restoring adds the backup's maps, points and exercises to this phone. Items that already exist are replaced by the backup copy.</p>`, box => {
+      <p class="tiny" style="margin-top:10px">Restoring adds the backup's maps, points and exercises to this phone. Items that already exist are replaced by the backup copy.</p>
+      <footer class="brand-foot in-sheet"><b>GridNav</b><span>Developed by <b>ASRAT</b></span></footer>`, box => {
       const json = () => JSON.stringify(Store.exportData(), null, 1);
       $('#bkShare', box).onclick = async () => { try { const r = await Native.shareFile(backupName(), json(), 'application/json', 'GridNav backup'); if (r !== 'cancelled') { Store.markBackup(); closeSheet(); toast(r === 'downloaded' ? 'Backup saved to Downloads' : 'Backup shared'); } } catch (e) { toast('Could not share: ' + e.message, true); } };
       $('#bkSave', box).onclick = async () => { try { const where = await Native.saveFile(backupName(), json(), 'application/json'); Store.markBackup(); closeSheet(); toast('Backup saved: ' + where); } catch (e) { toast('Could not save: ' + e.message, true); } };

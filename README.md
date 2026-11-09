@@ -1,5 +1,8 @@
 # GridNav — grid converter and navigation exercise planner
 
+**Developed by ASRAT**
+
+
 An **Android app (APK)** that works fully **without internet**. It can also be opened as a web page on a computer.
 Everything you make (maps, checkpoints, exercises) is saved **on your phone only**: no account, no cloud.
 

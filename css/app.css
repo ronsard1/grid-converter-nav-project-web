@@ -415,3 +415,10 @@ h3 { text-transform: uppercase; letter-spacing: .8px; font-size: 17px; }
 .op-pin.sel b { width: 34px; height: 34px; margin: -3px; border-color: var(--signal); border-width: 3px; }
 .op-row .op-name { display: block; font: 700 15px var(--cond); color: var(--signal); text-transform: uppercase; letter-spacing: .5px; }
 .op-row select { max-width: 40%; }
+
+/* brand line */
+.brand-foot { margin: 28px 0 8px; padding-top: 12px; border-top: 1px solid var(--rule); display: flex; justify-content: space-between; align-items: baseline; gap: 10px;
+  font: 600 11.5px var(--font); text-transform: uppercase; letter-spacing: 1.4px; color: var(--ink-3); }
+.brand-foot b { color: var(--ink-2); }
+.brand-foot span b { color: var(--signal); letter-spacing: 2px; }
+.brand-foot.in-sheet { margin-top: 16px; }
