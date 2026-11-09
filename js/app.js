@@ -628,13 +628,17 @@
       } else lines += el;
     });
     let marks = '';
+    // With one syndicate selected, its checkpoints are numbered in the order it visits them (CP1, CP2 …),
+    // like the leader summary; points it does not visit become small dots.
+    const selStops = sel ? (routes.find(r => r.synd === sel)?.stops || []) : null;
     P.forEach((x, i) => {
-      const used = !sel || i === 0 || routes.find(r => r.synd === sel)?.stops.includes(x.p.id);
+      const seqNo = selStops ? selStops.indexOf(x.p.id) + 1 : 0;
+      const used = !sel || i === 0 || seqNo > 0;
       const xx = X(x.g.E), yy = Y(x.g.N);
-      marks += i === 0
-        ? `<rect x="${xx - R}" y="${yy - R}" width="${2 * R}" height="${2 * R}" rx="5" class="ixm"/><text x="${xx}" y="${yy + R * 0.36}" class="pn" text-anchor="middle">IX</text>`
-        : `<circle cx="${xx}" cy="${yy}" r="${R}" class="cpm" opacity="${used ? 1 : 0.35}"/><text x="${xx}" y="${yy + R * 0.36}" class="pn" text-anchor="middle" opacity="${used ? 1 : 0.4}">${x.p.no}</text>`;
-      if (o.names) marks += `<text x="${xx + R + 4}" y="${yy - R * 0.6}" class="nm">${esc(x.p.name)}</text>`;
+      if (i === 0) marks += `<rect x="${xx - R}" y="${yy - R}" width="${2 * R}" height="${2 * R}" rx="5" class="ixm"/><text x="${xx}" y="${yy + R * 0.36}" class="pn" text-anchor="middle">IX</text>`;
+      else if (!used) marks += `<circle cx="${xx}" cy="${yy}" r="${R * 0.35}" class="cpm" opacity="0.35"/>`;
+      else marks += `<circle cx="${xx}" cy="${yy}" r="${R}" class="cpm" ${sel ? `style="fill:${colorOf(sel)}"` : ''}/><text x="${xx}" y="${yy + R * 0.36}" class="pn" text-anchor="middle">${sel ? seqNo : x.p.no}</text>`;
+      if (o.names && used) marks += `<text x="${xx + R + 4}" y="${yy - R * 0.6}" class="nm">${sel && i ? 'CP' + seqNo + ' · ' : ''}${esc(x.p.name)}</text>`;
     });
      return `<svg viewBox="0 0 ${W} ${H}" class="rmap ${o.big ? 'big' : ''}" role="img" aria-label="Route map" style="--fs:${fs}px">${g}${lines}${top}${marks}</svg>`;
   }
@@ -689,7 +693,9 @@
         ${routes.length ? `<div class="chips synchips" id="synChips"><button class="chip ${!S.selRoute ? 'on' : ''}" data-syn="">All</button>${routes.map(r => `<button class="chip ${S.selRoute === r.synd ? 'on' : ''}" data-syn="${r.synd}" style="${S.selRoute === r.synd ? `background:${colorOf(r.synd)};border-color:${colorOf(r.synd)}` : `border-color:${colorOf(r.synd)}`}">${r.synd}</button>`).join('')}</div>` : ''}
         <div class="rmap-wrap" id="rmap">${routeSVG(ex, [idx, ...pool.map(ptById)], routes, S.selRoute, { names: true, big: true, font: 22 })}</div>
         ${S.selRoute ? (() => { const r = routes.find(x => x.synd === S.selRoute); const inf = routeInfo(ex, r); const seq = [idx, ...r.stops.map(ptById), idx];
-          return `<div class="list" style="margin-top:8px">${inf.legs.map((L, i) => `<div class="li"><span class="no" style="background:${colorOf(r.synd)};color:#fff">${i + 1}</span><div class="main"><b>${i === 0 ? 'Index' : 'CP ' + seq[i].no} → ${i === inf.legs.length - 1 ? 'Index (home)' : 'CP ' + seq[i + 1].no + ' · ' + esc(seq[i + 1].name)}</b><span class="tiny">${bearingText(L)}</span></div><b>${(L.ground / 1000).toFixed(2)} km</b></div>`).join('')}
+          const nm = i => i === 0 ? 'Index' : i === seq.length - 1 ? 'Index (home)' : 'CP' + i;
+          return `<p class="tiny" style="margin-top:8px">Syndicate ${r.synd}'s checkpoints are numbered in the order it visits them, as on the leader summary.</p>
+            <div class="list" style="margin-top:6px">${inf.legs.map((L, i) => `<div class="li"><span class="no" style="background:${colorOf(r.synd)};color:#fff">${i === inf.legs.length - 1 ? 'IX' : i + 1}</span><div class="main"><b>${nm(i)} → ${nm(i + 1)}${i + 1 < seq.length - 1 ? ' · ' + esc(seq[i + 1].name) : ''}</b>${grHTML(gridOf(seq[i + 1]), 'sm')} <span class="tiny">${bearingText(L)}</span></div><b>${(L.ground / 1000).toFixed(2)} km</b></div>`).join('')}
             <div class="li"><div class="main"><b>Syndicate ${r.synd} total</b></div><b>${(inf.length / 1000).toFixed(2)} km</b></div></div>`; })()
           : `<p class="tiny" style="margin-top:6px">${routes.length ? 'Tap a syndicate number (or its line) to see its route alone, with arrows and the km of each leg.' : 'Your Index (IX) and checkpoints on the map grid. Make routes to see each syndicate\'s line.'}</p>`}
         <details class="adv" style="margin-top:8px"><summary>Distances between points (km)</summary>${distTableHTML([idx, ...pool.map(ptById)])}</details>
@@ -1095,12 +1101,19 @@
       const ex = currentEx(); const pts = points();
       const pos = p => { const w = wgsOf(p, m); return [w.lat, w.lon]; };
       const selR = ex && ex.routes && S.view !== 'control' && S.selRoute ? ex.routes.find(r => r.synd === S.selRoute) : null;
-      const onSel = selR ? new Set(selR.stops) : null;
       pts.forEach(p => {
         const isIdx = S.view === 'points' ? refPoint()?.id === p.id : ex && ex.indexId === p.id;
         const inPool = !ex || isIdx || (ex.poolIds || []).includes(p.id);
-        const faded = !inPool || (onSel && !isIdx && !onSel.has(p.id));
-        L.marker(pos(p), { icon: pin(isIdx ? 'IX' : p.no, isIdx ? 'index' : ''), opacity: faded ? .4 : 1, zIndexOffset: faded ? 0 : 500 })
+        if (selR && !isIdx) {
+          // Selected syndicate: its checkpoints numbered in visiting order (CP1, CP2 …); the rest are small dots.
+          const k = selR.stops.indexOf(p.id) + 1;
+          if (k) L.marker(pos(p), { icon: L.divIcon({ className: '', html: `<div class="lbl-pin" style="width:26px;height:26px;background:${colorOf(selR.synd)};border-color:#fff;color:#fff">${k}</div>`, iconSize: [26, 26], iconAnchor: [13, 13] }), zIndexOffset: 600 })
+            .bindTooltip(pointTip(p, `Syndicate ${selR.synd} · CP${k} of ${selR.stops.length}`), { className: 'tip', direction: 'top', offset: [0, -12] }).addTo(layer);
+          else L.marker(pos(p), { icon: L.divIcon({ className: '', html: '<div class="dot-pin"></div>', iconSize: [10, 10], iconAnchor: [5, 5] }), opacity: .5 })
+            .bindTooltip(pointTip(p, 'Point ' + p.no + ' (not on this route)'), { className: 'tip', direction: 'top' }).addTo(layer);
+          return;
+        }
+        L.marker(pos(p), { icon: pin(isIdx ? 'IX' : p.no, isIdx ? 'index' : ''), opacity: inPool ? 1 : .4, zIndexOffset: inPool ? 500 : 0 })
           .bindTooltip(pointTip(p, isIdx ? 'Index' : 'CP ' + p.no), { className: 'tip', direction: 'top', offset: [0, -12] }).addTo(layer);
       });
       // Spokes: a line from the Index to every point, with its distance (Points view, or before routes exist).
@@ -1127,7 +1140,7 @@
             const next = log.length < n ? ptById(r.stops[log.length]) : log.length === n ? idx : null;
             if (next && at) L.polyline([pos(at), pos(next)], { color: colorOf(r.synd), weight: 3, dashArray: '4 6' }).addTo(layer);
             if (log.length && at) L.marker(pos(at), { icon: L.divIcon({ className: '', html: `<div class="lbl-pin syn" style="width:22px;height:22px;color:${colorOf(r.synd)};border-width:3px">${r.synd}</div>`, iconSize: [22, 22], iconAnchor: [4, 26] }) })
-              .bindTooltip(`Syndicate ${r.synd} → ${next ? (next === idx ? 'Index' : 'CP ' + next.no) : 'finished'}`, { className: 'tip' }).addTo(layer);
+              .bindTooltip(`Syndicate ${r.synd} → ${next ? (next === idx ? 'Index (home)' : 'CP' + (log.length + 1) + ' · ' + esc(next.name)) : 'finished'}`, { className: 'tip' }).addTo(layer);
           });
         } else {
           ex.routes.forEach(r => {

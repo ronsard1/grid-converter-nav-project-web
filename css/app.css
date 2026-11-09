@@ -50,7 +50,9 @@ body {
 button, input, select, textarea { font: inherit; color: inherit; }
 button { cursor: pointer; }
 :focus-visible { outline: 2.5px solid var(--signal); outline-offset: 2px; border-radius: 4px; }
-svg { width: 22px; height: 22px; flex: none; }
+/* icon size for the app's own icons; the map's drawing layer (Leaflet) must keep its own size,
+   otherwise route lines shrink to nothing while arrows and labels still show */
+:where(svg:not(.leaflet-container svg)) { width: 22px; height: 22px; flex: none; }
 h2 { font: 700 26px/1.1 var(--cond); letter-spacing: .2px; }
 h3 { font: 600 19px/1.2 var(--cond); }
 .muted { color: var(--ink-2); }
@@ -388,3 +390,5 @@ h3 { text-transform: uppercase; letter-spacing: .8px; font-size: 17px; }
 
 .syn-bar { display: grid; grid-template-columns: 1fr auto; gap: 8px; align-items: end; margin-bottom: 8px; }
 .syn-bar .btn { height: 44px; }
+
+.dot-pin { width: 10px; height: 10px; border-radius: 50%; background: var(--ink-3); border: 2px solid var(--sheet); }
