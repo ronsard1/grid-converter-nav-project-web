@@ -658,6 +658,7 @@
     const xs = exercises();
     let ex = S.exOpen ? currentEx() : null;
     if (!ex) { S.exOpen = false; renderExHistory(el, xs, pts); return; }
+    if (ex.kind === 'op') return renderOperation(el, ex, pts);
     const idx = ptById(ex.indexId);
     const pool = (ex.poolIds || []).filter(id => ptById(id) && id !== ex.indexId);
     const routes = ex.routes || [];
@@ -798,6 +799,7 @@
 
   function exStatus(x) {
     const routes = x.routes || [], prog = x.progress || {};
+    if (x.kind === 'op') return (x.assign || []).length ? { label: 'Platoons assigned', cls: '' } : { label: 'Draft — not assigned yet', cls: 'soft' };
     if (!routes.length) return { label: 'Draft — no routes yet', cls: 'soft' };
     const fin = routes.filter(r => (prog[r.synd] || []).length > r.stops.length).length;
     const out = routes.filter(r => (prog[r.synd] || []).length > 0).length;
@@ -815,7 +817,8 @@
       ${list.length ? `<div class="list">${list.map(x => { const st = exStatus(x); const n = (x.routes || []).length; return `
         <div class="li tap exrow" data-open="${x.id}">
           <div class="main"><b>${esc(x.title || 'Untitled exercise')}</b>
-            <span class="tiny">${x.date ? esc(x.date) + ' · ' : ''}${x.coy ? esc(x.coy) + ' Coy · ' : ''}${n ? `${n} syndicates · ${x.perRoute} CPs · ${x.targetKm} km` : 'no routes yet'}</span>
+            <span class="tiny">${x.kind === 'op' ? `<span class="badge op">Operation</span> ${x.date ? esc(x.date) + ' · ' : ''}${x.intake ? esc(x.intake) + ' · ' : ''}${x.coys} coy × ${x.perCoy} platoons · ${(x.places || []).length} places`
+              : `${x.date ? esc(x.date) + ' · ' : ''}${x.coy ? esc(x.coy) + ' Coy · ' : ''}${n ? `${n} syndicates · ${x.perRoute} CPs · ${x.targetKm} km` : 'no routes yet'}`}</span>
             <div class="row" style="margin-top:4px"><span class="badge ${st.cls}">${esc(st.label)}</span><span class="tiny">created ${fmtDate(x.createdAt)}</span></div></div>
           <div class="acts"><button class="icon-btn sm" data-dup="${x.id}" aria-label="Copy exercise" title="Make a copy">${icon('copy')}</button><button class="icon-btn sm danger" data-delx="${x.id}" aria-label="Delete exercise" title="Delete">${icon('trash')}</button></div>
         </div>`; }).join('')}</div>
@@ -830,9 +833,9 @@
       confirmSheet('Delete exercise?', `Delete "${x.title}" with its routes and control-board times? This can't be undone.`, 'Delete exercise', async () => {
         await Store.remove('exercises', x.id); if (S.exId === x.id) S.exId = null; toast('Exercise deleted'); render(); MapUI.redraw(); }); });
     $$('[data-dup]', el).forEach(b => b.onclick = async () => { const x = Store.get('exercises', b.dataset.dup);
-      const { id, createdAt, updatedAt, routes, progress, startedAt, warnings, seed, ...rest } = x;
-      const c = await Store.save('exercises', { ...rest, title: (x.title || 'Exercise') + ' (copy)', routes: [], progress: {} });
-      S.exId = c.id; S.exOpen = true; toast('Copy made — press Make routes'); render(); });
+      const { id, createdAt, updatedAt, routes, progress, startedAt, warnings, seed, assign, ...rest } = x;
+      const c = await Store.save('exercises', { ...rest, title: (x.title || 'Exercise') + ' (copy)', routes: [], progress: {}, assign: [] });
+      S.exId = c.id; S.exOpen = true; toast(x.kind === 'op' ? 'Copy made — press Assign platoons' : 'Copy made — press Make routes'); render(); });
     S.pick = null;
   }
 
@@ -846,7 +849,21 @@
       (ex.perRoute > pool.length ? ` <span class="err">You asked for ${ex.perRoute} per route but only ${pool.length} are in play.</span>` : '');
   }
 
-  async function newExercise() {
+  function newExercise() {
+    openSheet(`<div class="sheet-head"><h3>New exercise</h3><button class="icon-btn" data-close aria-label="Close">✕</button></div>
+      <p class="small muted">What kind of exercise?</p>
+      <div class="stack" style="margin-top:12px">
+        <button class="btn kind-btn" data-kind="nav">${icon('route')}<span><b>Navigation</b><small>Syndicates walk routes through checkpoints, about the same km each</small></span></button>
+        <button class="btn kind-btn" data-kind="op">${icon('flag')}<span><b>Operation</b><small>Each platoon is given a place and an operation: fighting patrol, ambush, raid …</small></span></button>
+      </div>`, box => {
+      $$('[data-kind]', box).forEach(b => b.onclick = async () => { closeSheet(); b.dataset.kind === 'op' ? newOperation() : newNavigation(); });
+    });
+  }
+  async function newOperation() {
+    const x = await Store.save('exercises', { ...OP_DEF(), mapId: S.mapId });
+    S.exId = x.id; S.exOpen = true; S.selPl = null; lsSet(prefKey('ex'), x.id); render(); MapUI.redraw();
+  }
+  async function newNavigation() {
     const pts = points();
     const x = await Store.save('exercises', { ...DEF, mapId: S.mapId, title: '',
       indexId: pts[0]?.id || null, poolIds: pts.slice(1).map(p => p.id), routes: [], progress: {} });
@@ -901,6 +918,231 @@
     });
   }
 
+  /* ================================================================
+     OPERATIONS EXERCISE
+     The commander chooses places (points on the map) and the operation at
+     each place (fighting patrol, ambush, raid …). Companies × platoons must
+     equal the number of places. The app gives every platoon one place, and
+     prints one order per platoon plus a leader summary.
+     ================================================================ */
+  const PHONETIC = ['Alpha', 'Bravo', 'Charlie', 'Delta', 'Echo', 'Foxtrot', 'Golf', 'Hotel', 'India', 'Juliet', 'Kilo', 'Lima', 'Mike',
+    'November', 'Oscar', 'Papa', 'Quebec', 'Romeo', 'Sierra', 'Tango', 'Uniform', 'Victor', 'Whiskey', 'X-ray', 'Yankee', 'Zulu'];
+  const opId = () => 'o' + Math.random().toString(36).slice(2, 9);
+  // Starting values only: every one of these can be changed in the exercise.
+  const OP_DEF = () => ({
+    kind: 'op', title: '', intake: '', date: '', time: '0600', security: 'EX-SECRET', annex: 'Annex C to\nSerial 1',
+    coys: 1, perCoy: 3, coyNames: [], plNumbering: 'run', gridDigits: 6,
+    opTypes: [
+      ['Fighting patrol', 'defeat the enemy by conducting a fighting patrol'],
+      ['Ambush', 'destroy the enemy by conducting an ambush'],
+      ['Raid', 'destroy the enemy by conducting a raid'],
+      ['Dawn attack', 'defeat the enemy by conducting a dawn attack'],
+      ['Recce patrol', 'gain information on the enemy by conducting a recce patrol'],
+      ['Patrol base', 'establish and secure a patrol base'],
+      ['Alternative patrol base', 'establish and secure an alternative patrol base']].map(([name, task]) => ({ id: opId(), name, task })),
+    orderMsg: 'No {pl} Platoon is to {task} at grid {grid} ({latlon}) not later than {time} hrs on {date}.',
+    places: [], assign: []
+  });
+  const coyName = (ex, c) => (ex.coyNames || [])[c] || PHONETIC[c] || 'Coy ' + (c + 1);
+  // Every platoon of the exercise: key stays the same when names change.
+  function platoons(ex) {
+    const out = [];
+    for (let c = 0; c < ex.coys; c++) for (let k = 0; k < ex.perCoy; k++)
+      out.push({ key: c + '-' + k, c, coy: coyName(ex, c), no: ex.plNumbering === 'coy' ? k + 1 : c * ex.perCoy + k + 1 });
+    return out;
+  }
+  const opPlaces = ex => (ex.places || []).filter(pl => ptById(pl.id));
+  const opOfPlace = (ex, pointId) => { const pl = (ex.places || []).find(x => x.id === pointId); return pl && (ex.opTypes.find(o => o.id === pl.op) || ex.opTypes[0]); };
+  // pointId -> platoon, only for a complete and still valid assignment
+  function opAssignMap(ex) {
+    const pls = platoons(ex), places = new Set(opPlaces(ex).map(p => p.id)), out = new Map();
+    for (const a of ex.assign || []) { const pl = pls.find(x => x.key === a.key); if (pl && places.has(a.id)) out.set(a.id, pl); }
+    return out;
+  }
+  const wgsText = p => { const w = wgsOf(p); return `${Geo.toDMS(w.lat, true, 1)} ${Geo.toDMS(w.lon, false, 1)}`; };
+  const wgsDec = p => { const w = wgsOf(p); return `${w.lat.toFixed(5)}, ${w.lon.toFixed(5)}`; };
+  function fillOrder(ex, pl, p) {
+    const op = opOfPlace(ex, p.id) || { name: '', task: '' };
+    const v = { pl: pl.no, coy: pl.coy, task: op.task, op: op.name, place: p.name, grid: gridOf(p, ex.gridDigits), latlon: wgsText(p),
+      time: ex.time || '____', date: ex.date || '________', intake: ex.intake || '' };
+    return String(ex.orderMsg || '').replace(/\{(\w+)\}/g, (m, k) => (k in v ? v[k] : m));
+  }
+
+  /* The assignment: many random tries, keep the one with the fewest problems.
+     - a platoon should not get the same place it had last time (here or in earlier operations on this map)
+     - platoons of one company should get different kinds of operation when possible
+     Each press gives a new result. */
+  function assignPlatoons(ex) {
+    const pls = platoons(ex), places = opPlaces(ex);
+    if (places.length !== pls.length) return toast(`Choose exactly ${pls.length} places (you have ${places.length})`, true);
+    const before = new Map((ex.assign || []).map(a => [a.key, a.id]));
+    const label = pl => pl.coy + '|' + pl.no;
+    const past = new Map();
+    exercises().filter(x => x.kind === 'op' && x.id !== ex.id).forEach(x => { const pp = platoons(x); (x.assign || []).forEach(a => { const pl = pp.find(q => q.key === a.key); if (pl) past.set(label(pl) + '>' + a.id, 1); }); });
+    const R = Routes.rng((Date.now() % 2147483647) | 1);
+    let best = null, bestCost = Infinity;
+    for (let t = 0; t < 600; t++) {
+      const order = places.map(p => p.id);
+      for (let i = order.length - 1; i > 0; i--) { const j = Math.floor(R() * (i + 1)); [order[i], order[j]] = [order[j], order[i]]; }
+      let cost = R() * 0.5;
+      pls.forEach((pl, i) => {
+        if (places.length > 1 && before.get(pl.key) === order[i]) cost += 5;
+        if (past.has(label(pl) + '>' + order[i])) cost += 1.5;
+      });
+      for (let i = 0; i < pls.length; i++) for (let j = i + 1; j < pls.length; j++)
+        if (pls[i].c === pls[j].c && opOfPlace(ex, order[i])?.id === opOfPlace(ex, order[j])?.id) cost += 2;
+      if (cost < bestCost) { bestCost = cost; best = order; }
+    }
+    ex.assign = pls.map((pl, i) => ({ key: pl.key, id: best[i] }));
+    Store.save('exercises', ex); S.selPl = null; render(); MapUI.redraw(true);
+    toast(`${pls.length} platoons assigned`); backupReminder();
+  }
+
+  function renderOperation(el, ex, pts) {
+    ex.coyNames = ex.coyNames || [];
+    const pls = platoons(ex), need = pls.length;
+    const chosen = opPlaces(ex);
+    // a place just added with "Add a new place" is ticked straight away
+    if (S.opPending && S.opPending.exId === ex.id) {
+      const fresh = pts.filter(p => !S.opPending.before.has(p.id));
+      if (fresh.length) { fresh.forEach(p => ex.places.push({ id: p.id, op: ex.opTypes[0]?.id })); Store.save('exercises', ex); }
+      S.opPending = null; return renderOperation(el, ex, pts);
+    }
+    const asg = opAssignMap(ex);
+    const done = need > 0 && asg.size === need;
+    const byPl = new Map([...asg].map(([pid, pl]) => [pl.key, pid]));
+    const opOpts = cur => ex.opTypes.map(o => `<option value="${o.id}" ${o.id === cur ? 'selected' : ''}>${esc(o.name)}</option>`).join('');
+    const count = chosen.length === need ? `<span class="count ok">${chosen.length} of ${need} ✓</span>` : `<span class="count bad">${chosen.length} of ${need}</span>`;
+    const sample = pls[0] && chosen[0] ? fillOrder(ex, pls[0], ptById(chosen[0].id)) : '';
+    el.innerHTML = `<button class="btn sm ghost back" id="exBack">‹ All exercises</button>
+      <div class="view-head" style="margin-top:6px"><div><span class="badge op">Operation</span><h2 id="exTitleH">${esc(ex.title || 'Untitled operation')}</h2>
+        <p>${done ? `${need} platoons assigned` : 'Draft — platoons not assigned yet'} · created ${fmtDate(ex.createdAt)}</p></div></div>
+      <div class="stack">
+        <label class="fld"><span>Exercise name</span><input data-f="title" value="${esc(ex.title)}" placeholder="e.g. Ex Final Strike"></label>
+        <div class="grid2"><label class="fld"><span>Intake</span><input data-f="intake" value="${esc(ex.intake)}" placeholder="e.g. Intake 18"></label>
+        <label class="fld"><span>Date</span><input data-f="date" value="${esc(ex.date)}" placeholder="e.g. 14 Nov 26"></label></div>
+        <label class="fld"><span>Not later than (time, same for all)</span><input data-f="time" value="${esc(ex.time)}" placeholder="e.g. 0600" inputmode="numeric"></label>
+        <details class="adv"><summary>Paper header</summary><div class="grid2" style="margin-top:6px">
+          <label class="fld"><span>Security marking</span><input data-f="security" value="${esc(ex.security)}"></label>
+          <label class="fld"><span>Reference lines (top right)</span><textarea data-f="annex" rows="2">${esc(ex.annex)}</textarea></label></div></details>
+      </div>
+
+      <div class="section"><h3>Companies and platoons <span class="count">${need} platoons</span></h3>
+        <div class="grid2">
+          <label class="fld"><span>Companies</span><input type="number" min="1" max="26" data-n="coys" value="${ex.coys}"></label>
+          <label class="fld"><span>Platoons per company</span><input type="number" min="1" max="9" data-n="perCoy" value="${ex.perCoy}"></label></div>
+        <div class="coy-names">${Array.from({ length: ex.coys }, (_, c) => `<label class="fld"><span>Company ${c + 1}</span><input data-coy="${c}" value="${esc(ex.coyNames[c] || '')}" placeholder="${esc(PHONETIC[c] || 'Coy ' + (c + 1))}"></label>`).join('')}</div>
+        <div class="seg" role="group" aria-label="Platoon numbers" style="margin-top:8px"><button data-pn="run" class="${ex.plNumbering !== 'coy' ? 'on' : ''}">Run on: No 1–${need}</button><button data-pn="coy" class="${ex.plNumbering === 'coy' ? 'on' : ''}">No 1–${ex.perCoy} per company</button></div>
+        <p class="tiny" style="margin-top:6px">${esc(pls.slice(0, 6).map(p => `No ${p.no} (${p.coy})`).join(', '))}${need > 6 ? ' …' : ''}</p></div>
+
+      <div class="section"><h3>Places of operation ${count}</h3>
+        <p class="tiny" style="margin-bottom:8px">Tick ${need} places and choose the operation at each. Each place is a point on this map, entered by grid or by latitude/longitude.</p>
+        <div class="list">${pts.map(p => { const on = chosen.find(c => c.id === p.id); return `
+          <div class="li op-place ${on ? 'on' : ''}">
+            <button class="tick" data-pt="${p.id}" aria-label="${on ? 'Remove' : 'Use'} ${esc(p.name)}">${on ? '✓' : ''}</button>
+            <div class="main"><b>${p.no} · ${esc(p.name)}</b>${grHTML(gridOf(p), 'sm')} <span class="tiny">${esc(wgsText(p))}</span></div>
+            ${on ? `<select data-op="${p.id}" aria-label="Operation at ${esc(p.name)}">${opOpts(on.op)}</select>` : ''}
+          </div>`; }).join('') || '<div class="empty"><p class="small">No points on this map yet.</p></div>'}</div>
+        <div class="row" style="margin-top:8px"><button class="btn sm" id="opAddPt">${icon('plus')} Add a new place</button></div></div>
+
+      <details class="section adv"><summary><b>Operation types and their mission words</b> <span class="tiny">(${ex.opTypes.length})</span></summary>
+        <p class="tiny" style="margin:6px 0 8px">The mission words go into {task} in the order below. Change them to match your orders.</p>
+        <div class="stack">${ex.opTypes.map(o => `<div class="optype"><input data-otn="${o.id}" value="${esc(o.name)}" aria-label="Operation name"><input data-ott="${o.id}" value="${esc(o.task)}" aria-label="Mission words"><button class="icon-btn sm danger" data-otd="${o.id}" aria-label="Remove ${esc(o.name)}">${icon('trash')}</button></div>`).join('')}</div>
+        <button class="btn sm" id="otAdd" style="margin-top:8px">${icon('plus')} Add operation type</button></details>
+
+      <div class="section"><h3>Order wording</h3>
+        <label class="fld"><span>Sentence on each platoon's paper</span><textarea data-f="orderMsg" rows="3">${esc(ex.orderMsg)}</textarea></label>
+        <p class="tiny" style="margin-top:6px">Blanks the app fills in: {pl} platoon number · {coy} company · {op} operation · {task} mission words · {place} place name · {grid} grid · {latlon} coordinates · {time} · {date} · {intake}</p>
+        <div class="grid2" style="margin-top:8px"><label class="fld"><span>Grid on papers</span><select data-gd><option value="6" ${ex.gridDigits == 6 ? 'selected' : ''}>6 figures (100 m)</option><option value="8" ${ex.gridDigits == 8 ? 'selected' : ''}>8 figures (10 m)</option></select></label></div>
+        ${sample ? `<div class="callout" style="margin-top:8px" id="opSample"><span class="tiny">Example:</span><br>${esc(sample)}</div>` : ''}</div>
+
+      <div class="section"><button class="btn signal block" id="asgBtn" style="min-height:52px;font-size:16px" ${chosen.length === need ? '' : 'disabled'}>${done ? 'Assign again (new draw)' : 'Assign platoons to places'}</button>
+        ${chosen.length !== need ? `<p class="small err" style="margin-top:6px">${chosen.length < need ? `Tick ${need - chosen.length} more place${need - chosen.length > 1 ? 's' : ''}` : `Untick ${chosen.length - need} place${chosen.length - need > 1 ? 's' : ''}`}: ${need} platoons need ${need} places.</p>` : ''}
+        <p class="tiny" style="margin-top:6px">Each press gives a new draw. The app avoids giving a platoon the place it had last time, and gives the platoons of one company different kinds of operation when it can.</p></div>
+
+      ${done ? `<div class="section"><h3>Assignment</h3>
+        <div class="list">${pls.map(pl => { const p = ptById(byPl.get(pl.key)); const op = opOfPlace(ex, p.id); return `
+          <div class="li tap op-row ${S.selPl === pl.key ? 'sel' : ''}" data-pl="${pl.key}">
+            <span class="no" style="background:${colorOf(pl.c + 1)};color:#fff">${pl.no}</span>
+            <div class="main"><b>No ${pl.no} Pl · ${esc(pl.coy)} Coy</b><span class="op-name">${esc(op.name)}</span><span class="tiny">${esc(p.name)} · GR ${esc(gridOf(p, ex.gridDigits))}<br>${esc(wgsText(p))}</span></div>
+            <select data-swap="${pl.key}" aria-label="Change place">${chosen.map(c => { const q = ptById(c.id); return `<option value="${q.id}" ${q.id === p.id ? 'selected' : ''}>${q.no} · ${esc(q.name)}</option>`; }).join('')}</select>
+          </div>`; }).join('')}</div>
+        <p class="tiny" style="margin-top:6px">Tap a platoon to see its place on the map. Change a place with its list: the two platoons swap.</p></div>
+      <div class="section"><h3>Print</h3>
+        <div class="printgrid">
+          <button class="btn" data-oprint="sum">${icon('print')} Leader summary<small>All platoons, places, grids and coordinates</small></button>
+          <button class="btn" data-oprint="orders">${icon('print')} Platoon orders<small>One page per platoon</small></button>
+          <button class="btn" data-oprint="orders2">${icon('print')} Platoon orders (2 per page)<small>Saves paper — cut in half</small></button>
+        </div></div>` : ''}
+      <div class="section"><button class="btn ghost danger sm" id="delEx">${icon('trash')} Delete exercise</button></div>`;
+
+    const re = () => { const sc = $('#panel').scrollTop; render(); $('#panel').scrollTop = sc; MapUI.redraw(); };
+    $('#exBack', el).onclick = () => { S.exOpen = false; S.selPl = null; render(); MapUI.redraw(); };
+    $$('[data-f]', el).forEach(inp => inp.addEventListener('input', () => {
+      ex[inp.dataset.f] = inp.value; saveEx(ex);
+      if (inp.dataset.f === 'title') $('#exTitleH', el).textContent = inp.value || 'Untitled operation';
+      const s = $('#opSample', el); if (s && pls[0] && chosen[0]) s.innerHTML = '<span class="tiny">Example:</span><br>' + esc(fillOrder(ex, pls[0], ptById(chosen[0].id)));
+    }));
+    $$('[data-n]', el).forEach(inp => inp.addEventListener('change', () => {
+      const v = Math.round(Number(inp.value)); if (!(v >= 1)) return;
+      ex[inp.dataset.n] = Math.min(Number(inp.max), v); ex.assign = []; Store.save('exercises', ex); re();
+    }));
+    $$('[data-coy]', el).forEach(inp => inp.addEventListener('input', () => { ex.coyNames[Number(inp.dataset.coy)] = inp.value.trim(); saveEx(ex); }));
+    $$('[data-coy]', el).forEach(inp => inp.addEventListener('change', re));
+    $$('[data-pn]', el).forEach(b => b.onclick = () => { ex.plNumbering = b.dataset.pn; Store.save('exercises', ex); re(); });
+    $$('[data-pt]', el).forEach(b => b.onclick = () => {
+      const i = ex.places.findIndex(x => x.id === b.dataset.pt);
+      if (i >= 0) ex.places.splice(i, 1); else ex.places.push({ id: b.dataset.pt, op: ex.opTypes[0]?.id });
+      ex.assign = []; Store.save('exercises', ex); re();
+    });
+    $$('[data-op]', el).forEach(s => s.onchange = () => { ex.places.find(x => x.id === s.dataset.op).op = s.value; Store.save('exercises', ex); re(); });
+    $('#opAddPt', el).onclick = () => { S.opPending = { exId: ex.id, before: new Set(pts.map(p => p.id)) }; pointEditor(); };
+    $$('[data-otn]', el).forEach(i => i.addEventListener('input', () => { ex.opTypes.find(o => o.id === i.dataset.otn).name = i.value; saveEx(ex); }));
+    $$('[data-otn]', el).forEach(i => i.addEventListener('change', re));
+    $$('[data-ott]', el).forEach(i => i.addEventListener('input', () => { ex.opTypes.find(o => o.id === i.dataset.ott).task = i.value; saveEx(ex); }));
+    $$('[data-otd]', el).forEach(b => b.onclick = () => {
+      if (ex.opTypes.length < 2) return toast('Keep at least one operation type', true);
+      const id = b.dataset.otd; ex.opTypes = ex.opTypes.filter(o => o.id !== id);
+      ex.places.forEach(pl => { if (pl.op === id) pl.op = ex.opTypes[0].id; }); Store.save('exercises', ex); re();
+    });
+    $('#otAdd', el).onclick = () => { ex.opTypes.push({ id: opId(), name: 'New operation', task: 'conduct the operation' }); Store.save('exercises', ex); re(); };
+    const gd = $('[data-gd]', el); gd.onchange = () => { ex.gridDigits = Number(gd.value); Store.save('exercises', ex); re(); };
+    $('#asgBtn', el).onclick = () => assignPlatoons(ex);
+    $$('.op-row', el).forEach(r => r.onclick = e => {
+      if (e.target.closest('select')) return;
+      S.selPl = S.selPl === r.dataset.pl ? null : r.dataset.pl; re(); MapUI.redraw(true);
+      if (S.selPl && innerWidth <= 860) go('map');
+    });
+    $$('[data-swap]', el).forEach(s => s.onchange = () => {
+      const me = ex.assign.find(a => a.key === s.dataset.swap), other = ex.assign.find(a => a.id === s.value);
+      if (other && me) { other.id = me.id; me.id = s.value; Store.save('exercises', ex); re(); toast('Places swapped'); }
+    });
+    $$('[data-oprint]', el).forEach(b => b.onclick = () => printOps(ex, b.dataset.oprint));
+    $('#delEx', el).onclick = () => confirmSheet('Delete exercise?', `Delete "${ex.title || 'this operation'}"?`, 'Delete exercise', async () => {
+      await Store.remove('exercises', ex.id); S.exId = null; S.exOpen = false; toast('Exercise deleted'); render(); MapUI.redraw();
+    });
+    S.pick = null;
+  }
+
+  function printOps(ex, kind) {
+    const asg = opAssignMap(ex), pls = platoons(ex);
+    if (asg.size !== pls.length) return toast('Assign the platoons first', true);
+    const byPl = new Map([...asg].map(([pid, pl]) => [pl.key, pid]));
+    const rows = pls.map(pl => { const p = ptById(byPl.get(pl.key)); const op = opOfPlace(ex, p.id);
+      return { pl, op, p, grid: gridOf(p, ex.gridDigits), latlon: wgsText(p), dec: wgsDec(p), order: fillOrder(ex, pl, p) }; });
+    const doc = kind === 'sum' ? PrintDocs.opSummary({ ex, rows }) : PrintDocs.opOrders({ ex, rows, perPage: kind === 'orders2' ? 2 : 1 });
+    const page = `<style>@page { size: A4 ${doc.landscape ? 'landscape' : 'portrait'}; margin: 12mm; }</style>`;
+    const title = `${ex.title || 'Operation'} - ${kind === 'sum' ? 'Leader summary' : 'Platoon orders'}`;
+    if (Native.isApp()) {
+      const full = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>${esc(title)}</title>${page}<style>body{margin:0;background:#fff}</style></head><body>${doc.html}</body></html>`;
+      toast('Opening Android printing — choose a printer or "Save as PDF"');
+      Native.print(full, title, doc.landscape).catch(e => toast('Printing failed: ' + e.message, true));
+      return;
+    }
+    $('#printArea').innerHTML = page + doc.html;
+    setTimeout(() => window.print(), 150);
+  }
+
   function printCtx(ex) {
     const idx = ptById(ex.indexId);
     const pool = (ex.poolIds || []).map(ptById).filter(Boolean).sort((a, b) => a.no - b.no);
@@ -938,7 +1180,7 @@
     const el = $('[data-view="control"]'); const m = activeMap();
     if (!m) { el.innerHTML = `<div class="view-head"><div><h2>Control</h2></div></div>` + needMap('The control board'); return; }
     const ex = currentEx();
-    if (!ex || !ex.routes?.length || !ptById(ex.indexId)) {
+    if (!ex || ex.kind === 'op' || !ex.routes?.length || !ptById(ex.indexId)) {
       el.innerHTML = `<div class="view-head"><div><h2>Control board</h2><p>Follow every syndicate during the exercise. Each one's next checkpoint lights up.</p></div></div>
         <div class="empty"><p><b>No routes to follow yet.</b></p><button class="btn primary" data-go="exercise">Plan an exercise</button></div>`;
       return;
@@ -1100,6 +1342,7 @@
       const m = activeMap(); if (!m) { routePicker(null); return; }
       const ex = currentEx(); const pts = points();
       const pos = p => { const w = wgsOf(p, m); return [w.lat, w.lon]; };
+      if (ex && ex.kind === 'op' && S.view !== 'points' && S.view !== 'convert') { drawOps(ex, pts, pos, fit); routePicker(null); drawGrid(); return; }
       const selR = ex && ex.routes && S.view !== 'control' && S.selRoute ? ex.routes.find(r => r.synd === S.selRoute) : null;
       pts.forEach(p => {
         const isIdx = S.view === 'points' ? refPoint()?.id === p.id : ex && ex.indexId === p.id;
@@ -1165,6 +1408,31 @@
       routePicker(ex);
       if (fit && !selR) fitPoints();
       drawGrid();
+    }
+    // Operation exercise: every place with its platoon and operation; other points are small dots.
+    function drawOps(ex, pts, pos, fit) {
+      const asg = opAssignMap(ex), placed = new Set(opPlaces(ex).map(p => p.id));
+      let selP = null;
+      pts.forEach(p => {
+        if (!placed.has(p.id)) {
+          L.marker(pos(p), { icon: L.divIcon({ className: '', html: '<div class="dot-pin"></div>', iconSize: [10, 10], iconAnchor: [5, 5] }), opacity: .5 })
+            .bindTooltip(pointTip(p, 'Point ' + p.no + ' (not used)'), { className: 'tip', direction: 'top' }).addTo(layer);
+          return;
+        }
+        const pl = asg.get(p.id), op = opOfPlace(ex, p.id);
+        const sel = pl && S.selPl === pl.key; if (sel) selP = p;
+        const col = pl ? colorOf(pl.c + 1) : 'var(--ink-2)';
+        L.marker(pos(p), { opacity: S.selPl && !sel ? .45 : 1, zIndexOffset: sel ? 900 : 500,
+          icon: L.divIcon({ className: '', iconSize: [28, 28], iconAnchor: [14, 14],
+            html: `<div class="op-pin ${sel ? 'sel' : ''}"><b style="background:${col}">${pl ? pl.no : '•'}</b><span>${esc(op ? op.name : '')}</span></div>` }) })
+          .bindTooltip(pointTip(p, pl ? `No ${pl.no} Platoon · ${esc(pl.coy)} Coy · ${esc(op.name)}` : esc(op.name) + ' (not assigned yet)'), { className: 'tip', direction: 'top', offset: [0, -14] })
+          .on('click', () => { if (pl) { S.selPl = S.selPl === pl.key ? null : pl.key; if (S.view === 'exercise') render(); redraw(); } })
+          .addTo(layer);
+      });
+      if (fit) {
+        if (selP) map.setView(pos(selP), Math.max(map.getZoom(), 14));
+        else { const ll = pts.filter(p => placed.has(p.id)).map(pos); if (ll.length > 1) map.fitBounds(ll, { padding: [60, 60], maxZoom: 15 }); else if (ll.length) map.setView(ll[0], 14); else fitPoints(); }
+      }
     }
     function fitPoints() {
       if (!map) return; const m = activeMap(); if (!m) return;

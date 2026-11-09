@@ -5,6 +5,7 @@
    2b. Slips by checkpoint   (same slips grouped per place: one envelope per CP)
    3. Syndicate cards        (each syndicate carries one; logs arrival times)
    4. Control board snapshot (who is where, who is next)
+   5. Operations: leader summary + one order per platoon
    Every function returns { html, landscape }.
    ================================================================== */
 (function (root) {
@@ -282,5 +283,57 @@
     return { html: BASE + `<div class="pp">${html}</div>`, landscape: true };
   }
 
-  root.PrintDocs = { master, syndSlips, slips, sketches, cards, board };
+
+  /* ---------- operations exercise ---------- */
+  const OPS_CSS = `<style>
+    .pp .ord { font-family:'Times New Roman', Times, serif; font-size:12pt; display:flex; flex-direction:column; }
+    .pp .ord.half { height:132mm; overflow:hidden; border-bottom:1pt dashed #000; padding-bottom:4mm; margin-bottom:4mm; }
+    .pp .ord.half:last-child { border-bottom:none; }
+    .pp .ord .who { text-align:center; margin:6pt 0 2pt; font-size:20pt; font-weight:700; letter-spacing:1pt; }
+    .pp .ord .who small { display:block; font-size:12pt; font-weight:400; letter-spacing:.5pt; }
+    .pp .ord .opn { text-align:center; font-size:15pt; font-weight:700; text-transform:uppercase; border:1.5pt solid #000; padding:3pt 10pt; width:max-content; margin:6pt auto 10pt; }
+    .pp .ord h2 { font-family:'Times New Roman', Times, serif; font-size:12pt; text-decoration:underline; margin:4pt 0 3pt; }
+    .pp .ord .msg { font-size:13pt; line-height:1.45; margin-bottom:10pt; }
+    .pp .ord .otab th { width:34%; text-align:left; background:#eee; font-family:'Times New Roman', Times, serif; font-size:11pt; text-transform:none; }
+    .pp .ord .otab td { font-size:12pt; }
+    .pp .ord .gbig { font-family:'Courier New', monospace; font-weight:700; font-size:20pt; letter-spacing:2pt; }
+    .pp .ord.half .who { font-size:16pt; } .pp .ord.half .msg { font-size:11.5pt; margin-bottom:6pt; } .pp .ord.half .gbig { font-size:16pt; }
+    .pp .ord .fill { flex:1; }
+  </style>`;
+  function opHead(ex) {
+    const lines = String(ex.annex || '').split(/\n|\s\/\s/).map(x => x.trim()).filter(Boolean);
+    const right = [...lines, ex.title, ex.intake, ex.date ? 'DATED ' + ex.date : ''].filter(Boolean).map(l => `<div>${esc(String(l).toUpperCase())}</div>`).join('');
+    return `<div class="secm">${esc(ex.security || '')}</div><div class="rblock">${right}</div>`;
+  }
+  function opSummary(ctx) {
+    const { ex, rows } = ctx;
+    const body = rows.map((r, i) => `<tr><td class="c">${i + 1}</td><td>${esc(r.pl.coy)}</td><td class="c">No ${r.pl.no}</td><td>${esc(r.op.name)}</td>
+      <td>${esc(r.p.name)}</td><td class="nw">GR ${esc(r.grid)}</td><td class="nw">${esc(r.latlon)}<br><span class="small">${esc(r.dec)}</span></td><td class="c nw">${esc(ex.time || '')}</td></tr>`).join('');
+    const html = `<div class="page sum">${opHead(ex)}
+      <h1 class="sumt">OPERATIONS SUMMARY${ex.intake ? ' &mdash; ' + esc(String(ex.intake).toUpperCase()) : ''}</h1>
+      <table class="sumtab"><thead><tr><th style="width:24pt">S/N</th><th>COY</th><th>PL</th><th>OPERATION</th><th>PLACE</th><th>GRID</th><th>COORDINATES (WGS84)</th><th>NLT</th></tr></thead><tbody>${body}</tbody></table>
+      <p class="small" style="margin-top:6pt">All platoons: not later than ${esc(ex.time || '____')} hrs${ex.date ? ' on ' + esc(ex.date) : ''}.</p>
+      <div class="sign"><span>Prepared by: ______________________</span><span>Approved: ______________________</span></div>
+      <div class="secm" style="margin-top:14pt">${esc(ex.security || '')}</div></div>`;
+    return { html: BASE + OPS_CSS + `<div class="pp">${html}</div>`, landscape: true };
+  }
+  function opOrders(ctx) {
+    const { ex, rows, perPage } = ctx;
+    const one = r => `<div class="ord ${perPage === 2 ? 'half' : ''}">${opHead(ex)}
+        <div class="who">No ${r.pl.no} PLATOON<small>${esc(String(r.pl.coy).toUpperCase())} COMPANY${ex.intake ? ' &middot; ' + esc(ex.intake) : ''}</small></div>
+        <div class="opn">${esc(r.op.name)}</div>
+        <h2>MISSION</h2><p class="msg">${esc(r.order)}</p>
+        <table class="otab"><tr><th>Place</th><td>${esc(r.p.name)}</td></tr>
+          <tr><th>Grid</th><td class="gbig">${esc(r.grid)}</td></tr>
+          <tr><th>Coordinates (GPS, WGS84)</th><td>${esc(r.latlon)}<br><span class="small">${esc(r.dec)}</span></td></tr>
+          <tr><th>Not later than</th><td><b>${esc(ex.time || '____')} hrs</b>${ex.date ? ', ' + esc(ex.date) : ''}</td></tr></table>
+        <div class="fill"></div>
+        <div class="sign"><span>Received by: ____________________</span><span>Commander: ____________________</span></div>
+        <div class="secm" style="margin-top:6pt">${esc(ex.security || '')}</div></div>`;
+    const pages = [];
+    for (let i = 0; i < rows.length; i += perPage) pages.push(`<div class="page">${rows.slice(i, i + perPage).map(one).join('')}</div>`);
+    return { html: BASE + OPS_CSS + `<div class="pp">${pages.join('')}</div>`, landscape: false };
+  }
+
+  root.PrintDocs = { master, syndSlips, slips, sketches, cards, board, opSummary, opOrders };
 })(window);

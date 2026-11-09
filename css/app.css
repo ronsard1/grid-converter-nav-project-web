@@ -392,3 +392,26 @@ h3 { text-transform: uppercase; letter-spacing: .8px; font-size: 17px; }
 .syn-bar .btn { height: 44px; }
 
 .dot-pin { width: 10px; height: 10px; border-radius: 50%; background: var(--ink-3); border: 2px solid var(--sheet); }
+
+/* ---------- operations exercise ---------- */
+.badge.op { background: var(--signal-soft); color: var(--signal); border-color: var(--signal); text-transform: uppercase; letter-spacing: .6px; }
+.count.ok { color: var(--go); } .count.bad { color: var(--bad); }
+.coy-names { display: grid; grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); gap: 8px; margin-top: 8px; }
+.op-place { gap: 10px; }
+.op-place .tick { width: 30px; height: 30px; flex: none; border-radius: 6px; border: 2px solid var(--rule); background: var(--sheet); color: #fff; font: 700 16px var(--font); cursor: pointer; }
+.op-place.on .tick { background: var(--blue); border-color: var(--blue); }
+.op-place.on { border-left: 4px solid var(--blue); }
+.op-place select, .op-row select { max-width: 46%; min-height: 40px; font: 600 14px var(--font); border: 1.5px solid var(--rule); border-radius: var(--r-s); background: var(--sheet); color: var(--ink); padding: 0 6px; }
+.op-row.sel { outline: 2px solid var(--signal); outline-offset: -2px; }
+.optype { display: grid; grid-template-columns: minmax(110px, 1fr) 2fr auto; gap: 6px; align-items: center; }
+.optype input { min-height: 40px; border: 1.5px solid var(--rule); border-radius: var(--r-s); padding: 0 8px; background: var(--sheet); color: var(--ink); font: 500 14px var(--font); min-width: 0; }
+@media (max-width: 520px) { .optype { grid-template-columns: 1fr auto; } .optype [data-ott] { grid-column: 1 / -1; grid-row: 2; } }
+.kind-btn { justify-content: flex-start; text-align: left; gap: 12px; min-height: 64px; padding: 10px 14px; }
+.kind-btn svg { width: 26px; height: 26px; color: var(--blue); }
+.kind-btn small { display: block; font-weight: 400; color: var(--ink-3); font-size: 12.5px; margin-top: 2px; }
+.op-pin { position: relative; width: 28px; height: 28px; }
+.op-pin b { display: grid; place-items: center; width: 28px; height: 28px; border-radius: 50%; color: #fff; font: 700 14px var(--cond); border: 2px solid #fff; box-shadow: 0 1px 4px rgba(0,0,0,.45); }
+.op-pin span { position: absolute; left: 31px; top: 4px; white-space: nowrap; font: 700 12px var(--cond); background: rgba(245,243,233,.92); color: #1B1F16; padding: 1px 5px; border-radius: 4px; box-shadow: 0 0 0 1px rgba(0,0,0,.15); }
+.op-pin.sel b { width: 34px; height: 34px; margin: -3px; border-color: var(--signal); border-width: 3px; }
+.op-row .op-name { display: block; font: 700 15px var(--cond); color: var(--signal); text-transform: uppercase; letter-spacing: .5px; }
+.op-row select { max-width: 40%; }

@@ -1,5 +1,5 @@
 /* Offline support: keeps the app and the map tiles you have viewed. Bump VERSION after changing files. */
-const VERSION = 'gridnav-v3.2.0';
+const VERSION = 'gridnav-v3.3.0';
 const SHELL = ['./', 'index.html', 'css/app.css', 'js/geo.js', 'js/routes.js', 'js/store.js', 'js/print.js', 'js/app.js',
   'js/native.js', 'vendor/fonts.css', 'manifest.webmanifest', 'icons/icon.svg', 'icons/icon-192.png'];
 // Map library: from the app folder if it is there, else the internet copy. Saved now so the map works offline later.
