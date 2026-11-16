@@ -6,38 +6,54 @@
 An **Android app (APK)** that works fully **without internet**. It can also be opened as a web page on a computer.
 Everything you make (maps, checkpoints, exercises) is saved **on your phone only**: no account, no cloud.
 
-**→ To get the app on your phone, start with section 0 below.**
+**Website:** https://ronsard1.github.io/grid-converter-nav-project-web/
+**APK for your phone:** https://github.com/ronsard1/grid-converter-nav-project-web/releases/latest
+**Phone app (Flutter version):** https://github.com/ronsard1/grid-converter-nav-project-moboapp
 
-It does three jobs:
+It does four jobs:
 
 1. **Converts** grid references to latitude/longitude and back, accurately, using the map sheet you choose.
 2. **Plans navigation exercises**: every syndicate starts at the same Index, visits its own set of checkpoints in its own order, covers about the same distance, and returns.
-3. **Prints the papers** (master schedule, checkpoint slips, syndicate cards) and runs a **control board** where each syndicate's next move lights up.
+3. **Plans operation exercises**: each platoon is given a place and an operation (fighting patrol, ambush, raid …) and gets its own written order.
+4. **Prints the papers** and runs a **control board** where each syndicate's next move lights up.
 
 ---
 
-## 0. Get the APK on your phone (GitHub builds it for you)
+## 0. Getting the app, and updating it
 
-You don't install anything on your computer. GitHub's computers build the APK for free.
+This project is already on GitHub. Every time a change is pushed to `main`, GitHub does two things by itself (the instructions are in the `.github` folder):
+- **Build Android APK**: makes a new APK and puts it on the **Releases** page (about 8–12 minutes).
+- **Update website**: publishes the new version of the website (about 1 minute).
 
-**A. Put the project on GitHub (once)**
-1. Go to **github.com** and sign in (or create a free account).
-2. Top right **+** → **New repository** → name it `gridnav`. You can choose **Private** → **Create repository**.
-3. On the new page, click **uploading an existing file**.
-4. Unzip `grid-nav.zip` on your computer. Open the `grid-nav` folder, select **everything inside it** and drag it into the GitHub page. Then press **Commit changes**.
-   - Important: the hidden folder **`.github`** must be uploaded too, because it holds the build instructions. On Windows, turn on *View → Show → Hidden items* before selecting. On a Mac, press *Cmd + Shift + .* in Finder. If it's still missing, see "If the .github folder didn't upload" below.
+Watch them in the **Actions** tab: yellow = working, green ✓ = done, red ✗ = failed (open it and copy the red error lines). Only the **top** (newest) line matters; an old red ✗ further down was already fixed.
 
-**B. Wait for the build (about 8–12 minutes)**
-5. Open the **Actions** tab of your repository. "Build Android APK" runs automatically: yellow = working, green ✓ = done, red ✗ = failed (open it and send me the error lines).
+**Install on your phone:** open the APK link above on the phone → tap **GridNav-1.0.x.apk** → open the download → allow **Install unknown apps** once → **Install**. If *Play Protect* warns, tap *More details → Install anyway* (normal for apps not from the Play Store).
 
-**C. Install on your phone**
-6. On your phone, open your repository on github.com → **Releases** (right side, or `github.com/<you>/gridnav/releases`) → newest **GridNav 1.0.x** → tap **GridNav-1.0.x.apk** to download.
-7. Open the downloaded file. Android asks to allow **Install unknown apps** for your browser or Files app; allow it once. Then **Install**. If *Play Protect* warns, tap *More details → Install anyway*. This is normal for apps that aren't from the Play Store.
-8. Open **GridNav**. It works immediately, even in airplane mode.
+**Update after changing files on your computer** (VS Code terminal, inside this folder):
+```
+git add .
+git commit -m "what you changed"
+git push
+```
+Install the new APK **over** the old one. **Your data stays**, because every build is signed with the same key (`build/android/gridnav-test.keystore`). Don't uninstall first: that deletes the app's data. Save a backup if in doubt.
 
-**Updates:** change a file on GitHub (or upload new files) → GitHub builds a new release → install it over the old one. **Your data stays**, because every build is signed with the same key (`build/android/gridnav-test.keystore`). Don't uninstall first, since uninstalling deletes the app's data. Save a backup if in doubt.
+### Hidden files: what they are and how to see them
+Files and folders whose name starts with a dot are "hidden" settings files. You don't need to open them, but they must stay in the folder:
 
-**If the .github folder didn't upload:** in your repository, click **Add file → Create new file**, type the name `.github/workflows/build-apk.yml`, paste the contents of that file from the zip, then **Commit**.
+| Name | What it does |
+|---|---|
+| `.github/workflows/build-apk.yml` | Tells GitHub how to build the APK |
+| `.github/workflows/website.yml` | Tells GitHub to update the website after each push |
+| `.gitignore` | Tells git which folders not to upload (`node_modules`, `www`, `android`, APK files) |
+| `.nojekyll` | Tells GitHub Pages to show the files as they are |
+
+How to see them:
+- **Windows 11 File Explorer:** **View** (top bar) → **Show** → tick **Hidden items**.
+- **Windows 10 File Explorer:** **View** tab (top ribbon) → tick **Hidden items** (right side).
+- If you don't see **View**, press the **⋯** (See more) button or make the window wider.
+- **VS Code:** open the folder (*File → Open Folder*); the Explorer on the left shows dot files.
+- **On GitHub:** open the repository page; `.github` is listed at the top with the other folders.
+- **Mac Finder:** press **Cmd + Shift + .** (dot).
 
 **What the APK contains:** the whole app, the map library and the fonts, so it needs no internet. Only the photo/topo background map downloads tiles, and areas you've viewed stay available offline. The grid route map on the Exercise screen never needs internet.
 
@@ -82,13 +98,15 @@ Each point has **edit** (pencil) and **delete** (bin) buttons. If you delete a p
 
 Register the **Index** (start point) and every place you may use as a checkpoint. The numbers you give here are the checkpoint numbers printed on every paper.
 
+At the top of **Points**, choose the **Index (distances from)**. The list is then sorted **nearest first**, and each point shows its ground distance and bearing in mils from the Index. The map draws a dotted line from the Index to every point, with its km. *By number* switches back to number order.
+
 ### Step 4 — Plan the exercise
 **Exercise** opens your **exercise history**: every exercise on this map, newest first, with its name, date, company, syndicates, km and status (Draft / Planned / In progress / Finished).
 - Tap one to **open** it (to plan, print or follow it on the control board).
 - **Copy** reuses an old exercise's settings with new routes.
 - **Delete** removes it, with a confirmation first.
 
-**New exercise:** first give it a **name** (e.g. "Ex day navigation two").
+**New exercise:** choose **Navigation** (this step) or **Operation** (see *Operation exercise* below). Then give it a **name** (e.g. "Ex day navigation two").
 
 - **Start point (Index)**: tap one point (orange).
 - **Checkpoints in play**: tap the ones to use (blue).
@@ -97,7 +115,17 @@ Register the **Index** (start point) and every place you may use as a checkpoint
 
 **Map of points and routes:** once the Index and checkpoints are chosen, a map appears, drawn on your sheet's own grid squares and numbers. It needs no internet. Open **Distances between points (km)** to see a table of the km between every pair of points.
 
-Press **Make routes**. All syndicate routes are drawn together on the map. **Tap a syndicate number** (or its line) to see its route alone, with an arrow on each leg, the km of each leg, and a list of bearings. Tap **All** to see every route again. Each card shows the route, e.g. `IX › 4 › 6 › 10 › 2 › 5 › 1 › IX`, with its distance. Tap the pencil to change a stage by hand; the distance updates as you change it.
+Press **Make routes**. All syndicate routes are drawn together on the map. Choose a syndicate in **Show route of** (or tap its number, or its line on the map) to see its route alone: its checkpoints are numbered **CP1, CP2 … in the order it visits them**, like the leader summary, with an arrow and the km on each leg, and a list with the grid and bearing of each next checkpoint. **On map** opens it on the big map. Choose **All syndicates** to see every route again. Each card shows the route, e.g. `IX › 4 › 6 › 10 › 2 › 5 › 1 › IX`, with its distance. Tap the pencil to change a stage by hand; the distance updates as you change it.
+
+### Operation exercise
+**Exercise → New exercise → Operation.**
+1. Name, intake, date and the **not later than** time (the same for all platoons).
+2. **Companies** (named Alpha, Bravo, Charlie … ; rename them if you want) and **platoons per company** (3 by default). Platoon numbers run on (No 1–3 Alpha, No 4–6 Bravo) or restart at 1 in each company.
+3. **Places of operation:** tick as many places as there are platoons, and choose the operation at each place. Places are points on the map (by grid or lat/lon); *Add a new place* adds one.
+4. **Operation types** (fighting patrol, ambush, raid, dawn attack, recce patrol, patrol base, alternative patrol base) and their **mission words** can all be changed, and you can add your own.
+5. **Order wording:** the sentence printed on each platoon's paper. The app fills in `{pl}` platoon number, `{coy}` company, `{op}` operation, `{task}` mission words, `{place}`, `{grid}`, `{latlon}`, `{time}`, `{date}`, `{intake}`. Example result: *No 2 Platoon is to destroy the enemy by conducting an ambush at grid 214 534 (2°13′49.3″ S 30°11′32.7″ E) not later than 0530 hrs on 14 Nov 26.*
+6. **Assign platoons to places.** Each press gives a new draw: a platoon doesn't get the place it had last time, and platoons of one company get different kinds of operation when possible. Swap two platoons by hand with the list on each row.
+7. **Print:** *Leader summary* (all platoons, places, grids, coordinates, time) and *Platoon orders* (one page per platoon, or 2 per page). Coordinates on the papers are GPS (WGS 84).
 
 ### Step 5 — Print
 | Paper | Who gets it | What is on it |
@@ -121,7 +149,7 @@ On a phone, "Print" lets you **save as PDF** and share it.
 
 *By checkpoint* view: for each checkpoint, which syndicates should arrive next and which have already passed. Useful for checkpoint marshals.
 
-**Night mode** (moon button) turns everything red on black, which protects your night vision during night navigation.
+**Night mode** (moon button) turns the screen black with soft light text, and dims the background map.
 
 ---
 
@@ -197,7 +225,7 @@ The APK works fully offline from the first time you open it: conversion, points,
 
 ```
 index.html             the app page
-css/app.css            design (day and red night mode)
+css/app.css            design (military day theme and black night mode)
 js/geo.js              coordinate engine: TM Rwanda, UTM, datums (no screen code, easy to test)
 js/routes.js           route planner
 js/print.js            printed papers
@@ -208,15 +236,17 @@ tests/                 checks for the engine and planner (run automatically on e
 package.json, capacitor.config.json   APK build settings (Capacitor)
 build/                 APK build helpers, Android print module, signing key for test builds
 assets/                app icon
-.github/workflows/build-apk.yml       GitHub's build instructions
+.github/workflows/build-apk.yml       GitHub's APK build instructions
+.github/workflows/website.yml         publishes the website after every push
+.gitignore, .nojekyll                 git and GitHub Pages settings
 sw.js, manifest.webmanifest           offline support for the web version
 ```
 
 The app itself is plain HTML, CSS and JavaScript, which is easy to read and change. Capacitor wraps it as an Android app, and Leaflet draws the background map.
 
-## 5. Web version (optional)
+## 5. Web version
 
-The same files also work as a web page. Put them on any https host (GitHub Pages, Netlify, Firebase Hosting) and open the address in a browser. Data is then saved in that browser.
+The same files work as a website: https://ronsard1.github.io/grid-converter-nav-project-web/ (GitHub Pages, updated automatically after each push). Open it once with internet; it then works offline in that browser. Data is saved in that browser; use a backup file to move it to the phone and back.
 
 ## 6. Run the tests
 ```
